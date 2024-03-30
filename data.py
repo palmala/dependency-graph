@@ -1,4 +1,3 @@
-import copy
 import time
 from bs4 import BeautifulSoup
 import logging
@@ -8,9 +7,10 @@ import multiprocessing
 import requests
 import pandas as pd
 
+import logging_config
+
 # SOURCE = 'https://repo1.maven.org/maven2/'
 SOURCE = 'https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/'
-logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
 
 @lru_cache(maxsize=None)
@@ -29,7 +29,6 @@ def listFD(url: str) -> list:
 
 
 def process_dir(directory):
-    # logging.info(directory)
     elements = [element for element in listFD(directory) if not element.endswith("/../")]
     maven_xmls = [element for element in elements if element.endswith('maven-metadata.xml')]
     directories = [element for element in elements if element.endswith("/")]
@@ -63,7 +62,7 @@ def new_main():
     processed = 0
     while to_process:
         current_dir = to_process.pop()
-
+        logging.info(f"Processing {current_dir}")
         results = process_dir(current_dir)
         xmls = [{'main_dir': current_dir, 'maven_xml': maven_xml} for maven_xml in results]
         logging.info(f"Results for {current_dir}: {len(results)}, remaining: {len(to_process)}")
