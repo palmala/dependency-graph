@@ -9,7 +9,6 @@ import pandas as pd
 
 import logging_config
 
-# SOURCE = 'https://repo1.maven.org/maven2/'
 SOURCE = 'https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/'
 
 
@@ -23,7 +22,7 @@ def listFD(url: str) -> list:
         with session.get(url) as response:
             page = response.text
             soup = BeautifulSoup(page, 'html.parser')
-            result = [node.get('href') for node in soup.find_all('a') if
+            result = [url + node.get('href') for node in soup.find_all('a') if
                       node.get('href') and node.get('href') not in url]
             return result
 

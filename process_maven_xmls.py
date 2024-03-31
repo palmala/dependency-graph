@@ -9,6 +9,7 @@ import logging_config
 import xml.etree.ElementTree as ET
 import re
 
+XML_STORE = 'xmls.csv'
 
 @lru_cache(maxsize=None)
 def get_http_session():
@@ -67,7 +68,7 @@ def process_maven_xml(xml_url: str) -> dict:
 
 def get_data_maven_xmls() -> pd.DataFrame:
     try:
-        df = pd.read_csv('jetbrains.xmls.csv')
+        df = pd.read_csv(XML_STORE)
     except Exception as exp:
         logging.error('Nope!')
         exit(1)
