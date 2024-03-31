@@ -7,6 +7,7 @@ import requests
 from functools import lru_cache
 import logging_config
 import xml.etree.ElementTree as ET
+import re
 
 
 @lru_cache(maxsize=None)
@@ -22,6 +23,11 @@ def extract_latest_version(maven_xml: ET, url: str) -> str:
         latest = "ERROR"
 
     return latest
+
+
+def namespace(element):
+    m = re.match(r'\{.*\}', element.tag)
+    return m.group(0) if m else ''
 
 
 def process_maven_xml(xml_url: str) -> dict:
@@ -41,17 +47,22 @@ def process_maven_xml(xml_url: str) -> dict:
 
         basedir = xml_url.removesuffix('/maven-metadata.xml')
         release_details_xml = f"{basedir}/{latest}/{artifact_id}-{latest}.pom"
+        deps = []
         try:
-            response = session.get(release_details_xml)
-
-
-
+            response = session.get(release_details_xml).text
+            root = ET.fromstring(response)
+            ns = namespace(root)
+            dependencies = root.find(ns + 'dependencies')
+            for dependency in dependencies:
+                group_id = dependency.find(ns + 'groupId').text
+                artifact_id = dependency.find(ns + 'artifactId').text
+                version = dependency.find(ns + 'version').text
+                deps.append({'group_id': group_id, 'artifact_id': artifact_id, 'version': version})
         except Exception as err:
-            logging.error(f"Could not get {release_details_xml}")
-            release_details_xml = "ERROR"
+            logging.error(f"Could not get dependencies for {release_details_xml}")
 
-        return {'group_id': group_id, 'artifact_id': artifact_id, 'latest': latest,
-                'release_details_xml': release_details_xml}
+    return {'group_id': group_id, 'artifact_id': artifact_id, 'latest': latest,
+            'release_details_xml': release_details_xml, 'dependencies': deps}
 
 
 def get_data_maven_xmls() -> pd.DataFrame:
@@ -107,11 +118,24 @@ def main():
             print(f"[ERROR]: Exception during task exec: {err}")
 
     results = [res for res in results if res]
+    records = list()
+    for res in results:
+        for dep in res['dependencies']:
+            records.append({
+                'group_id': res['group_id'],
+                'artifact_id': res['artifact_id'],
+                'latest': res['latest'],
+                'release_details_xml': res['release_details_xml'],
+                'dep_group_id': dep['group_id'],
+                'dep_artifact_id': dep['artifact_id'],
+                'dep_version': dep['version']
+            })
+
     for res in results:
         logging.info(res)
     logging.info(f"Got results for {len(results)} artifacts")
     logging.info(f"Writing CSV: release_details.csv")
-    df = pd.DataFrame.from_records(results)
+    df = pd.DataFrame.from_records(records)
     df.to_csv('release_details.csv', index=False)
 
     run_length = time.perf_counter() - start
@@ -124,4 +148,4 @@ def test_me():
 
 
 if __name__ == "__main__":
-    test_me()
+    main()
