@@ -131,8 +131,6 @@ def main():
                 'dep_version': dep['version']
             })
 
-    for res in results:
-        logging.info(res)
     logging.info(f"Got results for {len(results)} artifacts")
     logging.info(f"Writing CSV: release_details.csv")
     df = pd.DataFrame.from_records(records)
