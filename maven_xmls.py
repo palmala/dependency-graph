@@ -54,19 +54,18 @@ def collect_maven_xmls(source: str) -> list:
     to_check = 0
     while main_directories:
         current_dir = main_directories.pop()
-        logging.info(f"Processing {current_dir}")
+        logging.debug(f"Processing {current_dir}")
         results = process_dir(current_dir)
         current = [{'main_dir': current_dir, 'maven_xml': maven_xml} for maven_xml in results]
-        logging.info(f"Results for {current_dir}: {len(results)}, remaining: {len(main_directories)}")
+        logging.debug(f"Results for {current_dir}: {len(results)}, remaining: {len(main_directories)}")
 
         if not results:
             current = [{'main_dir': current_dir, 'maven_xml': ""}]
         xmls.extend(current)
-        to_check += 1
-        if to_check == 20:
-            break
+        # to_check += 1
+        # if to_check == 20:
+        #     break
 
-    logging.info(f"Collecting xmls finished, got {len(xmls)} maven xml files")
     return xmls
 
 
@@ -107,7 +106,7 @@ def get_dependencies(pom_file):
 
 
 def process_maven_xml(xml_url: str) -> dict:
-    logging.info(f"Processing {xml_url}")
+    logging.debug(f"Processing {xml_url}")
     with get_http_session() as session:
         response = session.get(xml_url)
         page = response.text
@@ -136,7 +135,6 @@ def process_maven_xmls(maven_xmls_records: list, results_file: str = STORE_RESUL
 
     maven_xmls = [row['maven_xml'] for row in maven_xmls_records]
     logging.info(f"Gathering results for {len(maven_xmls)} maven xmls")
-    logging.info(f"MAVEN XMLS: {maven_xmls}")
 
     tasks = list()
     results = list()
