@@ -1,20 +1,73 @@
-import logging
-import multiprocessing
-import time
-import requests
-import pandas as pd
 import requests
 from functools import lru_cache
-import logging_config
-import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
+import logging
+import pandas as pd
 import re
+import xml.etree.ElementTree as ET
+import multiprocessing
 
-XML_STORE = 'xmls.csv'
+STORE_RESULTS = 'release_details.csv'
 
 
 @lru_cache(maxsize=None)
 def get_http_session():
     return requests.Session()
+
+
+def listFD(url: str) -> list:
+    with get_http_session() as session:
+        with session.get(url) as response:
+            page = response.text
+            soup = BeautifulSoup(page, 'html.parser')
+            results = list()
+            for node in soup.find_all('a'):
+                href = node.get('href')
+                if href not in url:
+                    if href.startswith("http://") or href.startswith("https://"):
+                        results.append(href)
+                    else:
+                        results.append(url + href)
+            return results
+
+
+def process_dir(directory):
+    elements = [element for element in listFD(directory) if not element.endswith("/../")]
+    maven_xmls = [element for element in elements if element.endswith('maven-metadata.xml')]
+    directories = [element for element in elements if element.endswith("/")]
+    if maven_xmls:
+        return maven_xmls
+
+    for directory in directories:
+        maven_xmls.extend(process_dir(directory))
+
+    return maven_xmls
+
+
+def collect_maven_xmls(source: str) -> list:
+    logging.info(f"Started collecting maven xmls from {source}")
+    main_directories = sorted([element for element in listFD(source) if
+                               element.endswith("/") and not element.endswith("/../")])
+    logging.info(f"Read {len(main_directories)} main directories")
+
+    xmls = list()
+    to_check = 0
+    while main_directories:
+        current_dir = main_directories.pop()
+        logging.info(f"Processing {current_dir}")
+        results = process_dir(current_dir)
+        current = [{'main_dir': current_dir, 'maven_xml': maven_xml} for maven_xml in results]
+        logging.info(f"Results for {current_dir}: {len(results)}, remaining: {len(main_directories)}")
+
+        if not results:
+            current = [{'main_dir': current_dir, 'maven_xml': ""}]
+        xmls.extend(current)
+        to_check += 1
+        if to_check == 20:
+            break
+
+    logging.info(f"Collecting xmls finished, got {len(xmls)} maven xml files")
+    return xmls
 
 
 def extract_latest_version(maven_xml: ET, url: str) -> str:
@@ -54,7 +107,7 @@ def get_dependencies(pom_file):
 
 
 def process_maven_xml(xml_url: str) -> dict:
-    # logging.info(f'Processing {xml_url}')
+    logging.info(f"Processing {xml_url}")
     with get_http_session() as session:
         response = session.get(xml_url)
         page = response.text
@@ -65,12 +118,11 @@ def process_maven_xml(xml_url: str) -> dict:
             artifact_id = root.findall("./artifactId")[0].text
             latest = extract_latest_version(root, xml_url)
         except Exception as exp:
-            logging.error(f'Failed to extract data from {xml_url}')
+            logging.error(f'Failed to extract data from {xml_url} due to : {exp}')
             return dict()
 
         basedir = xml_url.removesuffix('/maven-metadata.xml')
         release_details_xml = f"{basedir}/{latest}/{artifact_id}-{latest}.pom"
-        # logging.info(release_details_xml)
         deps = get_dependencies(release_details_xml)
         if not deps:
             logging.warning(f"No dependencies for {release_details_xml}")
@@ -79,51 +131,19 @@ def process_maven_xml(xml_url: str) -> dict:
             'release_details_xml': release_details_xml, 'dependencies': deps}
 
 
-def get_data_maven_xmls() -> pd.DataFrame:
-    try:
-        df = pd.read_csv(XML_STORE)
-    except Exception as exp:
-        logging.error('Nope!')
-        exit(1)
-
-    if df.empty:
-        logging.info("No data in csv file.")
-        exit(0)
-
-    return df
-
-
-def main():
-    start = time.perf_counter()
-
-    df = get_data_maven_xmls()
+def process_maven_xmls(maven_xmls_records: list, results_file: str = STORE_RESULTS) -> list:
     pool = multiprocessing.Pool(8)
 
-    logging.info(f"Gathering results for {len(df)} artifacts")
-    try:
-        latest_release_data = pd.read_csv('latest_release_data.csv')
-        processed_xmls = set(latest_release_data['maven_xml'].to_list())
-    except Exception as err:
-        latest_release_data = pd.DataFrame()
-        processed_xmls = set()
-
-    logging.info(f"Got results from previous run for {len(processed_xmls)} artifacts")
+    maven_xmls = [row['maven_xml'] for row in maven_xmls_records]
+    logging.info(f"Gathering results for {len(maven_xmls)} maven xmls")
+    logging.info(f"MAVEN XMLS: {maven_xmls}")
 
     tasks = list()
     results = list()
-    count = 0
-    for index, row in df.iterrows():
 
-        current_xml = row['maven_xml']
-        if current_xml in processed_xmls:
-            logging.info(f"Using previous results for {current_xml}")
-            continue
-        t = pool.apply_async(process_maven_xml, (current_xml,), callback=results.append)
+    for maven_xml in maven_xmls:
+        t = pool.apply_async(process_maven_xml, (maven_xml,), callback=results.append)
         tasks.append(t)
-
-        # count += 1
-        # if count == 5:
-        #     break
 
     for t in tasks:
         try:
@@ -146,17 +166,7 @@ def main():
             })
 
     logging.info(f"Got results for {len(results)} artifacts")
-    logging.info(f"Writing CSV: release_details.csv")
+    logging.info(f"Writing CSV: {results_file}")
     df = pd.DataFrame.from_records(records)
-    df.to_csv('release_details.csv', index=False)
-
-    run_length = time.perf_counter() - start
-    logging.info(f"Execution took {run_length} seconds")
-
-
-def test_me():
-    logging.info(get_dependencies('https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/ktor-bom/3.0.0-beta-2-eap-926/ktor-bom-3.0.0-beta-2-eap-926.pom'))
-
-
-if __name__ == "__main__":
-    main()
+    df.to_csv(results_file, index=False)
+    return records
