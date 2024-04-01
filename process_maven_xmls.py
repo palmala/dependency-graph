@@ -11,6 +11,7 @@ import re
 
 XML_STORE = 'xmls.csv'
 
+
 @lru_cache(maxsize=None)
 def get_http_session():
     return requests.Session()
@@ -20,7 +21,7 @@ def extract_latest_version(maven_xml: ET, url: str) -> str:
     try:
         latest = maven_xml.findall("./versioning/latest")[0].text
     except Exception as err:
-        logging.error(f"Failed to extract latest version from {url}")
+        logging.error(f"Failed to extract latest version from {url} with error: {err}")
         latest = "ERROR"
 
     return latest
@@ -31,8 +32,29 @@ def namespace(element):
     return m.group(0) if m else ''
 
 
+def get_dependencies(pom_file):
+    deps = []
+    session = get_http_session()
+    try:
+        response = session.get(pom_file).text
+        root = ET.fromstring(response)
+        ns = namespace(root)
+        dependencies = root.find(ns + 'dependencies')
+        if dependencies is None:
+            dependencies = root.find(ns + 'dependencyManagement/' + ns + 'dependencies')
+        for dependency in dependencies:
+            dep_group_id = dependency.find(ns + 'groupId').text
+            dep_artifact_id = dependency.find(ns + 'artifactId').text
+            dep_version = dependency.find(ns + 'version').text
+            deps.append({'group_id': dep_group_id, 'artifact_id': dep_artifact_id, 'version': dep_version})
+    except Exception as err:
+        logging.error(f"Could not get dependencies for {pom_file} due to error: {err}")
+
+    return deps
+
+
 def process_maven_xml(xml_url: str) -> dict:
-    logging.info(f'Processing {xml_url}')
+    # logging.info(f'Processing {xml_url}')
     with get_http_session() as session:
         response = session.get(xml_url)
         page = response.text
@@ -48,19 +70,10 @@ def process_maven_xml(xml_url: str) -> dict:
 
         basedir = xml_url.removesuffix('/maven-metadata.xml')
         release_details_xml = f"{basedir}/{latest}/{artifact_id}-{latest}.pom"
-        deps = []
-        try:
-            response = session.get(release_details_xml).text
-            root = ET.fromstring(response)
-            ns = namespace(root)
-            dependencies = root.find(ns + 'dependencies')
-            for dependency in dependencies:
-                group_id = dependency.find(ns + 'groupId').text
-                artifact_id = dependency.find(ns + 'artifactId').text
-                version = dependency.find(ns + 'version').text
-                deps.append({'group_id': group_id, 'artifact_id': artifact_id, 'version': version})
-        except Exception as err:
-            logging.error(f"Could not get dependencies for {release_details_xml}")
+        # logging.info(release_details_xml)
+        deps = get_dependencies(release_details_xml)
+        if not deps:
+            logging.warning(f"No dependencies for {release_details_xml}")
 
     return {'group_id': group_id, 'artifact_id': artifact_id, 'latest': latest,
             'release_details_xml': release_details_xml, 'dependencies': deps}
@@ -142,8 +155,7 @@ def main():
 
 
 def test_me():
-    logging.info(process_maven_xml(
-        'https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/plugin/plugin/maven-metadata.xml'))
+    logging.info(get_dependencies('https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/ktor-bom/3.0.0-beta-2-eap-926/ktor-bom-3.0.0-beta-2-eap-926.pom'))
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT)
 
     logging.info("Getting projects")
-    projects = MavenProjectsProvider('jetbrains.release_details.csv').get_projects()
+    projects = MavenProjectsProvider('release_details.csv').get_projects()
 
     logging.info("Creating base graph")
     subject = dot_builder(projects, "base_projects")

@@ -9,8 +9,11 @@ import pandas as pd
 
 import logging_config
 
-SOURCE = 'https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/'
 
+# SOURCE = 'https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/'
+# SOURCE = 'https://packages.atlassian.com/mvn/maven-atlassian-external/com/hazelcast/'
+# SOURCE = 'https://repo1.maven.org/maven2/com/google/'
+SOURCE = 'https://repo1.maven.org/maven2/hu/bme/mit/theta/'
 
 @lru_cache(maxsize=None)
 def get_session():
@@ -48,12 +51,12 @@ def new_main():
                                element.endswith("/") and not element.endswith("/../")])
     logging.info(f"Read {len(main_directories)} main directories")
 
-    try:
-        progress = pd.read_csv('xmls.csv')
-        processed = set(progress['main_dir'].to_list())
-    except FileNotFoundError:
-        progress = pd.DataFrame()
-        processed = set()
+    # try:
+    #     progress = pd.read_csv('xmls.csv')
+    #     processed = set(progress['main_dir'].to_list())
+    # except FileNotFoundError:
+    progress = pd.DataFrame()
+    processed = set()
 
     total = len(main_directories)
     to_process = [directory for directory in main_directories if directory not in processed]

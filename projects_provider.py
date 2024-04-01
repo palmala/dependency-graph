@@ -38,11 +38,12 @@ class MavenProjectsProvider(ProjectsProvider):
         self.df['project'] = self.df.apply(self.__get_project_name, axis=1)
         self.df['dep_project'] = self.df.apply(self.__get_dep_project_name, axis=1)
         projects_of_interest = set(self.df['project'].to_list())
+        # logging.info("Projects of interest: " + "\n".join(projects_of_interest))
 
         for index, row in self.df.iterrows():
             proj = row['project']
             dep = row['dep_project']
-            if proj in projects_of_interest and proj != dep:
+            if dep in projects_of_interest and proj != dep:
                 self.graph[proj].add(dep)
 
     @classmethod
