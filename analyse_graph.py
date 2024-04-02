@@ -1,4 +1,4 @@
-from maven_xmls import collect_maven_xmls, process_maven_xmls
+from maven_xmls import collect_maven_xmls
 from dotbuilder import *
 from projects_provider import MavenProjectsProvider
 import logging_config
@@ -9,8 +9,7 @@ import shutil
 # SOURCE = 'https://packages.atlassian.com/mvn/maven-atlassian-external/com/hazelcast/'
 # SOURCE = 'https://repo1.maven.org/maven2/com/google/'
 SOURCES = [
-    'https://repo1.maven.org/maven2/hu/bme/mit/theta/',
-    'https://maven.pkg.jetbrains.space/public/p/ktor/eap/io/ktor/'
+    'https://repo1.maven.org/maven2/hu/bme/mit/theta/'
 ]
 OUTPUT = "build"
 FILENAMES = "{basedir}/{prefix}_{filename}.dot"
@@ -26,8 +25,7 @@ if __name__ == "__main__":
         results_file = f"{OUTPUT}/{results_file_prefix}.release_details.csv"
 
         maven_xmls = collect_maven_xmls(source)
-        release_detail_records = process_maven_xmls(maven_xmls, results_file=results_file)
-        projects = MavenProjectsProvider(release_detail_records).get_projects()
+        projects = MavenProjectsProvider(maven_xmls).get_projects()
 
         logging.info(f"Analysing graph for {source}")
         subject = dot_builder(projects, "base_projects")

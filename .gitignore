@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .idea
 *.csv
+build.old/
 
 # C extensions
 *.so
